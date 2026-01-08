@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Reentry Simulator – Telemetry View</title>
+<style>
+body { margin:0; background:#0b1220; color:white; font-family:Arial, Helvetica, sans-serif; }
+.container { display:grid; grid-template-columns:300px 1fr; height:100vh; }
+.controls { padding:16px; background:#111827; border-right:2px solid #1f2937; overflow-y:auto; }
+.control { margin-bottom:16px; }
+label { font-weight:bold; }
+input[type=range] { width:100%; }
+.range-note { font-size:11px; opacity:0.7; }
+.toggle { display:flex; align-items:center; gap:8px; margin-top:10px; }
+.readout {
+  margin-top:16px;
+  font-size:13px;
+  background:rgba(0,0,0,0.45);
+  padding:12px;
+  border-radius:8px;
+  line-height:1.5;
+}
+.viz { display:grid; grid-template-rows:repeat(4,1fr); gap:10px; padding:10px; }
+canvas { background:#020617; border-radius:10px; }
+</style>
+</head>
+
+<body>
+<div class="container">
+<div class="controls">
+<h3>Reentry Controls</h3>
+
+<div class="control">
+<label>Mass (kg)</label>
+<input id="mass" type="range" min="2000" max="10000" value="5560" step="10">
+<div class="range-note">2000 → 10000 kg</div>
+</div>
+
+<div class="control">
+<label>Entry Angle (°)</label>
+<input id="angle" type="range" min="-20" max="5" value="-5">
+<div class="range-note">-20° (steep) → +5° (shallow / skip)</div>
+</div>
+
+<div class="control">
+<label>Velocity</label>
+<input id="velocity" type="range" min="0" max="100" value="50">
+<div class="range-note">7 → 11 km/s</div>
+</div>
+
+<div class="control">
+<label>Bank Angle</label>
+<input id="bank" type="range" min="0" max="180" value="0">
+<div class="range-note">0° (lift up) → 180° (lift down)</div>
+</div>
+
+<div class="control">
+<label>L/D Ratio</label>
+<input id="ld" type="range" min="35" max="100" value="35">
+<div class="range-note">0.35 → 1.0</div>
+</div>
+
+<div class="toggle">
+<input type="checkbox" id="showMarker" checked>
+<label for="showMarker">Show Peak Heat Time Marker</label>
+</div>
+
+<div class="toggle">
+<input type="checkbox" id="showAltLine" checked>
+<label for="showAltLine">Show Peak Heat Altitude Line</label>
+</div>
+
+<div class="readout" id="readout"></div>
+</div>
+
+<div class="viz">
+<canvas id="alt"></canvas>
+<canvas id="vel"></canvas>
+<canvas id="g"></canvas>
+<canvas id="heat"></canvas>
+</div>
+</div>
+
+<script>
+const canvases = {
+  alt: document.getElementById("alt"),
+  vel: document.getElementById("vel"),
+  g: document.getElementById("g"),
+  heat: document.getElementById("heat")
+};
+
+Object.values(canvases).forEach(c => {
+  c.width = c.clientWidth * 3;
+  c.height = c.clientHeight;
+});
+
+function plot(canvas, data, label, units, maxVal, color, dt, markerIndex, hLineValue=null){
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  const w=canvas.width, h=canvas.height;
+  const left=70, bottom=h-35, right=w-10, top=10;
+
+  ctx.strokeStyle="#334155";
+  ctx.beginPath();
+  ctx.moveTo(left,top);
+  ctx.lineTo(left,bottom);
+  ctx.lineTo(right,bottom);
+  ctx.stroke();
+
+  ctx.fillStyle="white";
+  ctx.font="12px Arial";
+  for(let i=0;i<=5;i++){
+    const y=bottom-i*(bottom-top)/5;
+    ctx.beginPath();
+    ctx.moveTo(left-5,y);
+    ctx.lineTo(left,y);
+    ctx.stroke();
+    ctx.fillText((maxVal*i/5).toFixed(0),8,y+4);
+  }
+
+  const totalTime=data.length*dt;
+  for(let i=0;i<=5;i++){
+    const x=left+i*(right-left)/5;
+    ctx.beginPath();
+    ctx.moveTo(x,bottom);
+    ctx.lineTo(x,bottom+5);
+    ctx.stroke();
+    ctx.fillText(Math.round(totalTime*i/5),x-8,bottom+18);
+  }
+
+  ctx.strokeStyle=color;
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  data.forEach((v,i)=>{
+    const x=left+i*(right-left)/data.length;
+    const y=bottom-(v/maxVal)*(bottom-top);
+    if(i===0) ctx.moveTo(x,y);
+    else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  if(markerIndex !== null){
+    const mx=left+markerIndex*(right-left)/data.length;
+    ctx.strokeStyle="#22d3ee";
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(mx,top);
+    ctx.lineTo(mx,bottom);
+    ctx.stroke();
+  }
+
+  if(hLineValue !== null){
+    const y=bottom-(hLineValue/maxVal)*(bottom-top);
+    ctx.strokeStyle="#a855f7";
+    ctx.setLineDash([10,6]);
+    ctx.beginPath();
+    ctx.moveTo(left,y);
+    ctx.lineTo(right,y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.font="14px Arial";
+  ctx.fillText(`${label} (${units})`,left+10,top+14);
+}
+
+const VEHICLE={ Cd:1.0, area:12.5 };
+
+function update(){
+  const m=+mass.value;
+  const gammaDeg=+angle.value;
+  const gamma0=gammaDeg*Math.PI/180;
+  const vScale=+velocity.value/100;
+  const bankRad=(+bank.value)*Math.PI/180;
+  const LD=+ld.value/100;
+
+  const showMarker=document.getElementById("showMarker").checked;
+  const showAltLine=document.getElementById("showAltLine").checked;
+
+  const g0=9.81, rho0=1.225;
+  const H_dyn=8800;        // dynamics atmosphere
+  const H_heat=10000;      // heating atmosphere (shifts peak to 60–80 km)
+
+  let h=120000;
+  let v=7000+vScale*4000;
+  let gamma=gamma0;
+
+  const dt=0.25, maxSteps=5000;
+
+  let alt=[], vel=[], gHist=[], heat=[];
+  let maxG=0, maxHeat=0, peakHeatIndex=null;
+
+  for(let i=0;i<maxSteps;i++){
+    const rho=rho0*Math.exp(-h/H_dyn);
+    const rhoHeat=rho0*Math.exp(-h/H_heat);
+
+    const D=0.5*rho*v*v*VEHICLE.Cd*VEHICLE.area;
+    const L=LD*D*Math.min(1,rho/0.02);
+
+    const aD=D/m;
+    const aL=L/m*Math.cos(bankRad);
+
+    v+=(-aD-g0*Math.sin(gamma))*dt;
+    gamma+=(aL/v-g0*Math.cos(gamma)/v)*dt;
+    h+=v*Math.sin(gamma)*dt;
+
+    // Convective stagnation heating (scaled to kW/m²)
+    const Q = 1.1e-4 * Math.sqrt(rhoHeat) * Math.pow(v,3);
+    const Q_kW = Q / 1000;
+
+    alt.push(h/1000);
+    vel.push(v/1000);
+    gHist.push(aD/g0);
+    heat.push(Q_kW);
+
+    if(Q_kW>maxHeat){
+      maxHeat=Q_kW;
+      peakHeatIndex=i;
+    }
+    maxG=Math.max(maxG,aD/g0);
+    if(h<=0) break;
+  }
+
+  const marker = showMarker ? peakHeatIndex : null;
+  const peakAlt = (showAltLine && peakHeatIndex!==null) ? alt[peakHeatIndex] : null;
+
+  plot(canvases.alt, alt, "Altitude", "km", 120, "#38bdf8", dt, marker, peakAlt);
+  plot(canvases.vel, vel, "Velocity", "km/s", 11, "#eab308", dt, marker);
+  plot(canvases.g, gHist, "Deceleration", "g", 60, "#f87171", dt, marker);
+  plot(canvases.heat, heat, "Heat Flux", "kW/m²", 10000, "#fb923c", dt, marker);
+
+  const TstagK = 0.5 * 1.4 / (1.4 - 1) * Math.pow(v,2) / 287;
+  const TstagF = (TstagK - 273.15) * 9/5 + 32;
+
+  readout.innerHTML=`
+  <strong>CONTROL SETTINGS</strong><br>
+  Mass: ${m.toFixed(0)} kg<br>
+  Entry Angle: ${gammaDeg.toFixed(1)} °<br>
+  Velocity: ${(7+vScale*4).toFixed(2)} km/s<br>
+  Bank Angle: ${(bankRad*180/Math.PI).toFixed(0)} °<br>
+  L/D Ratio: ${LD.toFixed(2)}<br><br>
+
+  <strong>PEAK VALUES</strong><br>
+  Max Decel: ${maxG.toFixed(2)} g<br>
+  Peak Heat Flux: ${maxHeat.toFixed(0)} kW/m²<br>
+  Peak Heat Altitude: ${peakAlt ? peakAlt.toFixed(1) : "--"} km<br>
+  Peak Stagnation Temp: ${TstagF.toFixed(0)} °F
+  `;
+}
+
+document.querySelectorAll("input").forEach(i=>i.oninput=update);
+update();
+</script>
+</body>
+</html>
