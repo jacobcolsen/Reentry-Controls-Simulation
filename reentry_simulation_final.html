@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atmospheric Reentry Control Simulation</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-bg: #0a0e17;
+            --secondary-bg: #141922;
+            --accent-orange: #ff6b35;
+            --accent-blue: #00d9ff;
+            --accent-green: #39ff14;
+            --text-primary: #e8eaed;
+            --text-secondary: #9aa0a6;
+            --border-color: #2d3748;
+            --glow-orange: rgba(255, 107, 53, 0.3);
+            --glow-blue: rgba(0, 217, 255, 0.3);
+        }
+
+        body {
+            font-family: 'Roboto Mono', monospace;
+            background: linear-gradient(135deg, #0a0e17 0%, #1a1f2e 100%);
+            color: var(--text-primary);
+            padding: 10px;
+            min-height: 100vh;
+            max-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(circle at 20% 30%, var(--glow-orange) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, var(--glow-blue) 0%, transparent 50%);
+            opacity: 0.1;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+            height: calc(100vh - 20px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 15px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        .left-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .left-panel::-webkit-scrollbar-track {
+            background: var(--primary-bg);
+            border-radius: 3px;
+        }
+
+        .left-panel::-webkit-scrollbar-thumb {
+            background: var(--accent-orange);
+            border-radius: 3px;
+        }
+
+        .left-panel::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-blue);
+        }
+
+        .charts-section {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .charts-section::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .charts-section::-webkit-scrollbar-track {
+            background: var(--primary-bg);
+            border-radius: 3px;
+        }
+
+        .charts-section::-webkit-scrollbar-thumb {
+            background: var(--accent-blue);
+            border-radius: 3px;
+        }
+
+        .charts-section::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-orange);
+        }
+
+        .chart-container {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 900;
+            text-align: center;
+            margin-bottom: 3px;
+            background: linear-gradient(135deg, var(--accent-orange), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            animation: titleGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes titleGlow {
+            0%, 100% { filter: drop-shadow(0 0 10px var(--glow-orange)); }
+            50% { filter: drop-shadow(0 0 20px var(--glow-blue)); }
+        }
+
+        .subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.65rem;
+            margin-bottom: 8px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .controls-section {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .controls-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-group {
+            background: var(--primary-bg);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .control-group:hover {
+            border-color: var(--accent-orange);
+            box-shadow: 0 0 20px var(--glow-orange);
+        }
+
+        .control-label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+            margin-bottom: 6px;
+            display: block;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .slider-container {
+            position: relative;
+            margin-bottom: 6px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: linear-gradient(90deg, var(--accent-orange), var(--accent-blue));
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--accent-orange);
+            border: 2px solid var(--text-primary);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--glow-orange);
+            transition: all 0.2s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 20px var(--glow-orange);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: var(--accent-orange);
+            border: 2px solid var(--text-primary);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--glow-orange);
+            transition: all 0.2s ease;
+        }
+
+        .value-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.6rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .current-value {
+            color: var(--accent-green);
+            font-weight: 500;
+            font-size: 0.7rem;
+        }
+
+        .metrics-section {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .metric-card {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .metric-card:hover {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 20px var(--glow-blue);
+        }
+
+        .metric-label {
+            font-size: 0.6rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .metric-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--accent-orange);
+        }
+
+        .metric-unit {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            margin-left: 2px;
+        }
+
+        .toggle-section {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .toggle-label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            flex: 1;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--border-color);
+            transition: 0.3s;
+            border-radius: 26px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background: linear-gradient(135deg, var(--accent-orange), var(--accent-blue));
+            box-shadow: 0 0 10px var(--glow-orange);
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+
+        .chart-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        canvas {
+            max-height: 160px !important;
+            width: 100% !important;
+            display: block;
+        }
+        
+        .chart-container canvas {
+            position: relative;
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 1.8rem; }
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+            .metrics-section { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Reentry Control Simulation</h1>
+        <p class="subtitle">3 Degree-of-Freedom Atmospheric Reentry Dynamics</p>
+
+        <div class="main-layout">
+            <div class="left-panel">
+                <div class="controls-section">
+                    <div class="controls-grid">
+                        <div class="control-group">
+                            <label class="control-label">Vehicle Mass</label>
+                            <div class="slider-container">
+                                <input type="range" id="mass" min="2000" max="10000" value="5000" step="100">
+                            </div>
+                            <div class="value-display">
+                                <span>2,000 kg</span>
+                                <span class="current-value" id="mass-value">5,000 kg</span>
+                                <span>10,000 kg</span>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label class="control-label">Entry Velocity</label>
+                            <div class="slider-container">
+                                <input type="range" id="velocity" min="7" max="12" value="9" step="0.1">
+                            </div>
+                            <div class="value-display">
+                                <span>7.0 km/s</span>
+                                <span class="current-value" id="velocity-value">9.0 km/s</span>
+                                <span>12.0 km/s</span>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label class="control-label">Flight Path Angle</label>
+                            <div class="slider-container">
+                                <input type="range" id="fpa" min="-20" max="5" value="-5" step="0.5">
+                            </div>
+                            <div class="value-display">
+                                <span>-20.0°</span>
+                                <span class="current-value" id="fpa-value">-5.0°</span>
+                                <span>5.0°</span>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label class="control-label">Bank Angle</label>
+                            <div class="slider-container">
+                                <input type="range" id="bank" min="0" max="180" value="0" step="5">
+                            </div>
+                            <div class="value-display">
+                                <span>0°</span>
+                                <span class="current-value" id="bank-value">0°</span>
+                                <span>180°</span>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label class="control-label">Lift-to-Drag Ratio (L/D)</label>
+                            <div class="slider-container">
+                                <input type="range" id="ld" min="0" max="1" value="0.3" step="0.05">
+                            </div>
+                            <div class="value-display">
+                                <span>0.00</span>
+                                <span class="current-value" id="ld-value">0.30</span>
+                                <span>1.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metrics-section">
+                    <div class="metric-card">
+                        <div class="metric-label">Max Deceleration</div>
+                        <div class="metric-value" id="max-decel">---<span class="metric-unit">g</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Peak Heat Flux</div>
+                        <div class="metric-value" id="peak-heat">---<span class="metric-unit">kW/m²</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Peak Heat Altitude</div>
+                        <div class="metric-value" id="heat-alt">---<span class="metric-unit">km</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Peak Stagnation Temp</div>
+                        <div class="metric-value" id="stag-temp">---<span class="metric-unit">°F</span></div>
+                    </div>
+                </div>
+
+                <div class="toggle-section">
+                    <div class="toggle-container">
+                        <label class="toggle-label">Show Peak Heat Flux Indicators</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="peak-indicator-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="charts-section">
+                <div class="chart-container">
+                    <div class="chart-title">Altitude vs Time</div>
+                    <canvas id="altitudeChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Velocity vs Time</div>
+                    <canvas id="velocityChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Deceleration vs Time</div>
+                    <canvas id="decelChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Heat Flux vs Time</div>
+                    <canvas id="heatChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update slider values and auto-run simulation
+        const sliders = ['mass', 'velocity', 'fpa', 'bank', 'ld'];
+        sliders.forEach(slider => {
+            const input = document.getElementById(slider);
+            const display = document.getElementById(`${slider}-value`);
+            
+            input.addEventListener('input', () => {
+                let value = parseFloat(input.value);
+                let formatted;
+                
+                switch(slider) {
+                    case 'mass':
+                        formatted = `${value.toLocaleString()} kg`;
+                        break;
+                    case 'velocity':
+                        formatted = `${value.toFixed(1)} km/s`;
+                        break;
+                    case 'fpa':
+                    case 'bank':
+                        formatted = `${value.toFixed(1)}°`;
+                        break;
+                    case 'ld':
+                        formatted = value.toFixed(2);
+                        break;
+                }
+                
+                display.textContent = formatted;
+                
+                // Auto-run simulation when slider changes
+                runSimulation();
+            });
+        });
+
+        // Chart instances
+        let charts = {};
+        let peakHeatTime = 0;
+        let peakHeatAltitude = 0;
+
+        // Toggle event listener
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('peak-indicator-toggle').addEventListener('change', () => {
+                updateCharts(charts.timeData, charts.altitudeData, charts.velocityData, charts.decelData, charts.heatFluxData);
+            });
+        });
+
+        // Constants
+        const R_EARTH = 6378.137; // km
+        const G = 6.674e-11; // m^3/(kg*s^2)
+        const M_EARTH = 5.972e24; // kg
+        const OMEGA_EARTH = 7.2921e-5; // rad/s
+        const RHO_SEA = 1.225; // kg/m^3
+        const V_SEA = Math.sqrt(G * M_EARTH / (R_EARTH * 1000)) / 1000; // km/s
+
+        // Atmospheric density model (exponential)
+        function atmosphericDensity(altitude) {
+            const h0 = 7.249; // scale height in km
+            const rho0 = 1.225; // sea level density kg/m^3
+            return rho0 * Math.exp(-altitude / h0);
+        }
+
+        // Gravity model
+        function gravity(r) {
+            return (G * M_EARTH) / ((r * 1000) ** 2) / 1000; // km/s^2
+        }
+
+        // Heat flux calculation
+        function heatFlux(rho, V) {
+            return 199830 * Math.pow(rho / RHO_SEA, 0.5) * Math.pow(V / V_SEA, 3.15) * 1000;
+        }
+
+        // Stagnation temperature (simplified)
+        function stagnationTemp(V) {
+            const gamma = 1.4;
+            const R = 287; // J/(kg*K)
+            const T_inf = 288; // K (atmospheric temp)
+            return T_inf * (1 + ((gamma - 1) / 2) * Math.pow(V * 1000 / Math.sqrt(gamma * R * T_inf), 2));
+        }
+
+        function runSimulation() {
+            // Get input parameters
+            const mass = parseFloat(document.getElementById('mass').value);
+            const V0 = parseFloat(document.getElementById('velocity').value);
+            const fpa0_deg = parseFloat(document.getElementById('fpa').value);
+            const bank_deg = parseFloat(document.getElementById('bank').value);
+            const LD = parseFloat(document.getElementById('ld').value);
+
+            // Convert to radians
+            const phi0 = fpa0_deg * Math.PI / 180;
+            const mu = bank_deg * Math.PI / 180;
+
+            // Initial conditions
+            const h0 = 120; // km entry altitude
+            let r = R_EARTH + h0;
+            let V = V0;
+            let phi = phi0;
+            let delta = 0; // latitude
+            let lambda = 0; // longitude
+            let A = 0; // azimuth (heading)
+
+            // Simulation parameters
+            const dt = 0.1; // time step (seconds)
+            const maxTime = 2500; // maximum simulation time (seconds)
+            
+            // Storage arrays
+            const time = [];
+            const altitude = [];
+            const velocity = [];
+            const deceleration = [];
+            const heatFluxData = [];
+
+            // Reference area and drag coefficient (assumed)
+            const S_ref = 15.0; // m^2
+            const CD = 1.5;
+            const CL = CD * LD;
+
+            let t = 0;
+            let maxDecel = 0;
+            let maxHeat = 0;
+            let maxHeatAlt = 0;
+            let maxTemp = 0;
+            let maxHeatIndex = 0;
+            let currentIndex = 0;
+            
+            // Reset peak heat tracking
+            peakHeatTime = 0;
+            peakHeatAltitude = 0;
+
+            // Euler integration
+            while (t < maxTime && r > R_EARTH && r < R_EARTH + 200) {
+                const h = r - R_EARTH;
+                
+                if (h < 0) break;
+
+                // Define the derivatives function for RK5
+                const derivatives = (r_val, V_val, phi_val, A_val, delta_val, lambda_val) => {
+                    const h_val = r_val - R_EARTH;
+                    const rho = atmosphericDensity(h_val);
+                    const q = 0.5 * rho * (V_val * 1000) ** 2;
+                    const D = q * S_ref * CD / 1000;
+                    const L = q * S_ref * CL / 1000;
+                    const gc = gravity(r_val);
+                    const g_delta = 0;
+                    const centrifugal_r = OMEGA_EARTH ** 2 * r_val * Math.cos(delta_val);
+                    const coriolis_term = 2 * OMEGA_EARTH * V_val * Math.sin(A_val) * Math.cos(delta_val);
+
+                    const r_dot = V_val * Math.sin(phi_val);
+                    const V_dot = -D / mass - gc * Math.sin(phi_val) - centrifugal_r * (Math.cos(phi_val) * Math.cos(A_val) * Math.sin(delta_val) - Math.sin(phi_val) * Math.cos(delta_val));
+                    const phi_dot = (V_val / r_val) * Math.cos(phi_val) + L * Math.cos(mu) / (mass * V_val) - (gc / V_val) * Math.cos(phi_val) + centrifugal_r * (Math.sin(phi_val) * Math.cos(A_val) * Math.sin(delta_val) + Math.cos(phi_val) * Math.cos(delta_val)) / V_val + coriolis_term / V_val;
+                    const A_dot = (V_val / r_val) * Math.cos(phi_val) * Math.sin(A_val) * Math.tan(delta_val) + L * Math.sin(mu) / (mass * V_val * Math.cos(phi_val));
+                    const delta_dot = (V_val / r_val) * Math.cos(phi_val) * Math.cos(A_val);
+                    const lambda_dot = (V_val / r_val) * Math.cos(phi_val) * Math.sin(A_val) / Math.cos(delta_val);
+
+                    return { r_dot, V_dot, phi_dot, A_dot, delta_dot, lambda_dot };
+                };
+
+                // RK5 (5th order Runge-Kutta) integration
+                const k1 = derivatives(r, V, phi, A, delta, lambda);
+                
+                const k2 = derivatives(
+                    r + dt * k1.r_dot / 4,
+                    V + dt * k1.V_dot / 4,
+                    phi + dt * k1.phi_dot / 4,
+                    A + dt * k1.A_dot / 4,
+                    delta + dt * k1.delta_dot / 4,
+                    lambda + dt * k1.lambda_dot / 4
+                );
+                
+                const k3 = derivatives(
+                    r + dt * (k1.r_dot + k2.r_dot) / 8,
+                    V + dt * (k1.V_dot + k2.V_dot) / 8,
+                    phi + dt * (k1.phi_dot + k2.phi_dot) / 8,
+                    A + dt * (k1.A_dot + k2.A_dot) / 8,
+                    delta + dt * (k1.delta_dot + k2.delta_dot) / 8,
+                    lambda + dt * (k1.lambda_dot + k2.lambda_dot) / 8
+                );
+                
+                const k4 = derivatives(
+                    r + dt * (-k2.r_dot + 2 * k3.r_dot) / 2,
+                    V + dt * (-k2.V_dot + 2 * k3.V_dot) / 2,
+                    phi + dt * (-k2.phi_dot + 2 * k3.phi_dot) / 2,
+                    A + dt * (-k2.A_dot + 2 * k3.A_dot) / 2,
+                    delta + dt * (-k2.delta_dot + 2 * k3.delta_dot) / 2,
+                    lambda + dt * (-k2.lambda_dot + 2 * k3.lambda_dot) / 2
+                );
+                
+                const k5 = derivatives(
+                    r + dt * (3 * k1.r_dot + 9 * k4.r_dot) / 16,
+                    V + dt * (3 * k1.V_dot + 9 * k4.V_dot) / 16,
+                    phi + dt * (3 * k1.phi_dot + 9 * k4.phi_dot) / 16,
+                    A + dt * (3 * k1.A_dot + 9 * k4.A_dot) / 16,
+                    delta + dt * (3 * k1.delta_dot + 9 * k4.delta_dot) / 16,
+                    lambda + dt * (3 * k1.lambda_dot + 9 * k4.lambda_dot) / 16
+                );
+                
+                const k6 = derivatives(
+                    r + dt * (-3 * k1.r_dot + 2 * k2.r_dot + 12 * k3.r_dot - 12 * k4.r_dot + 8 * k5.r_dot) / 7,
+                    V + dt * (-3 * k1.V_dot + 2 * k2.V_dot + 12 * k3.V_dot - 12 * k4.V_dot + 8 * k5.V_dot) / 7,
+                    phi + dt * (-3 * k1.phi_dot + 2 * k2.phi_dot + 12 * k3.phi_dot - 12 * k4.phi_dot + 8 * k5.phi_dot) / 7,
+                    A + dt * (-3 * k1.A_dot + 2 * k2.A_dot + 12 * k3.A_dot - 12 * k4.A_dot + 8 * k5.A_dot) / 7,
+                    delta + dt * (-3 * k1.delta_dot + 2 * k2.delta_dot + 12 * k3.delta_dot - 12 * k4.delta_dot + 8 * k5.delta_dot) / 7,
+                    lambda + dt * (-3 * k1.lambda_dot + 2 * k2.lambda_dot + 12 * k3.lambda_dot - 12 * k4.lambda_dot + 8 * k5.lambda_dot) / 7
+                );
+
+                // Calculate metrics at current state before updating
+                const rho = atmosphericDensity(h);
+                const decel_g = Math.abs(k1.V_dot) / 9.81e-3;
+                const heat = heatFlux(rho, V);
+                const temp = stagnationTemp(V);
+
+                // Update maxima
+                if (decel_g > maxDecel) maxDecel = decel_g;
+                if (heat > maxHeat) {
+                    maxHeat = heat;
+                    maxHeatAlt = h;
+                    maxHeatIndex = currentIndex;
+                }
+                if (temp > maxTemp) maxTemp = temp;
+
+                // Store data
+                time.push(t);
+                altitude.push(h);
+                velocity.push(V);
+                deceleration.push(decel_g);
+                heatFluxData.push(heat);
+
+                currentIndex++;
+
+                // Update state variables using RK5
+                r += dt * (7 * k1.r_dot + 32 * k3.r_dot + 12 * k4.r_dot + 32 * k5.r_dot + 7 * k6.r_dot) / 90;
+                V += dt * (7 * k1.V_dot + 32 * k3.V_dot + 12 * k4.V_dot + 32 * k5.V_dot + 7 * k6.V_dot) / 90;
+                phi += dt * (7 * k1.phi_dot + 32 * k3.phi_dot + 12 * k4.phi_dot + 32 * k5.phi_dot + 7 * k6.phi_dot) / 90;
+                A += dt * (7 * k1.A_dot + 32 * k3.A_dot + 12 * k4.A_dot + 32 * k5.A_dot + 7 * k6.A_dot) / 90;
+                delta += dt * (7 * k1.delta_dot + 32 * k3.delta_dot + 12 * k4.delta_dot + 32 * k5.delta_dot + 7 * k6.delta_dot) / 90;
+                lambda += dt * (7 * k1.lambda_dot + 32 * k3.lambda_dot + 12 * k4.lambda_dot + 32 * k5.lambda_dot + 7 * k6.lambda_dot) / 90;
+
+                t += dt;
+
+                // Safety checks
+                if (V <= 0 || isNaN(V) || isNaN(r)) break;
+            }
+
+            // Set peak heat flux time and altitude from the stored index
+            peakHeatTime = time[maxHeatIndex];
+            peakHeatAltitude = altitude[maxHeatIndex];
+            
+            console.log('=== SIMULATION COMPLETE ===');
+            console.log('Max Heat Index:', maxHeatIndex);
+            console.log('Peak Heat Time:', peakHeatTime, 'seconds');
+            console.log('Peak Heat Altitude:', peakHeatAltitude, 'km');
+            console.log('Max Heat Flux:', maxHeat, 'W/m²');
+            console.log('Time array length:', time.length);
+            console.log('Time at index', maxHeatIndex, ':', time[maxHeatIndex]);
+            console.log('Heat flux at index', maxHeatIndex, ':', heatFluxData[maxHeatIndex]);
+
+            // Update metrics display
+            document.getElementById('max-decel').innerHTML = `${maxDecel.toFixed(1)}<span class="metric-unit">g</span>`;
+            
+            // Format peak heat with commas
+            const peakHeatValue = (maxHeat / 1000).toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+            document.getElementById('peak-heat').innerHTML = `${peakHeatValue}<span class="metric-unit">kW/m²</span>`;
+            
+            document.getElementById('heat-alt').innerHTML = `${maxHeatAlt.toFixed(1)}<span class="metric-unit">km</span>`;
+            
+            // Convert Kelvin to Fahrenheit: °F = (K - 273.15) × 9/5 + 32
+            const maxTempF = (maxTemp - 273.15) * 9/5 + 32;
+            const tempFormatted = Math.round(maxTempF).toLocaleString('en-US');
+            document.getElementById('stag-temp').innerHTML = `${tempFormatted}<span class="metric-unit">°F</span>`;
+
+            // Store data for toggle functionality
+            charts.timeData = time;
+            charts.altitudeData = altitude;
+            charts.velocityData = velocity;
+            charts.decelData = deceleration;
+            charts.heatFluxData = heatFluxData;
+
+            // Update charts
+            updateCharts(time, altitude, velocity, deceleration, heatFluxData);
+        }
+
+        function updateCharts(time, altitude, velocity, deceleration, heatFlux) {
+            const showIndicators = document.getElementById('peak-indicator-toggle').checked;
+            
+            console.log('=== UPDATE CHARTS ===');
+            console.log('peakHeatTime from global:', peakHeatTime);
+            console.log('peakHeatAltitude from global:', peakHeatAltitude);
+            console.log('showIndicators:', showIndicators);
+            
+            // Find the actual max in the heat flux data to verify
+            let actualMaxHeat = 0;
+            let actualMaxIndex = 0;
+            for (let i = 0; i < heatFlux.length; i++) {
+                if (heatFlux[i] > actualMaxHeat) {
+                    actualMaxHeat = heatFlux[i];
+                    actualMaxIndex = i;
+                }
+            }
+            console.log('Actual max heat flux:', actualMaxHeat, 'at index:', actualMaxIndex, 'time:', time[actualMaxIndex]);
+            
+            // Get min and max time for synchronized x-axes
+            const minTime = Math.min(...time);
+            const maxTime = Math.max(...time);
+            
+            // Pre-calculate exact tick positions to force alignment
+            const timeRange = maxTime - minTime;
+            const stepSize = Math.ceil(timeRange / 8); // Aim for ~8-10 ticks
+            
+            // Create a shared x-axis configuration to ensure perfect alignment
+            const sharedXAxisConfig = {
+                type: 'linear',
+                min: minTime,
+                max: maxTime,
+                bounds: 'data',
+                grid: { 
+                    color: 'rgba(255, 255, 255, 0.1)',
+                    drawOnChartArea: true,
+                    lineWidth: 1
+                },
+                ticks: { 
+                    color: '#9aa0a6',
+                    stepSize: stepSize,
+                    maxRotation: 0,
+                    minRotation: 0,
+                    autoSkip: false,
+                    callback: function(value) {
+                        return Math.round(value);
+                    }
+                },
+                title: {
+                    display: true,
+                    text: 'Time (s)',
+                    color: '#00d9ff',
+                    font: { family: 'Orbitron', size: 12 }
+                },
+                offset: false
+            };
+            
+            // Shared layout configuration with explicit dimensions
+            const sharedLayout = {
+                padding: {
+                    left: 10,
+                    right: 10,
+                    top: 5,
+                    bottom: 5
+                }
+            };
+            
+            // Shared y-axis configuration to ensure same width
+            const sharedYAxisConfig = {
+                grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                ticks: { 
+                    color: '#9aa0a6',
+                    padding: 5,
+                    maxTicksLimit: 6
+                },
+                grace: 0,
+                afterFit: function(scaleInstance) {
+                    scaleInstance.width = 80; // Force all y-axes to be exactly 80 pixels wide
+                }
+            };
+            
+            // Create annotation for vertical line at peak heat flux time
+            const verticalLineAnnotation = showIndicators ? {
+                type: 'line',
+                scaleID: 'x',
+                value: peakHeatTime,
+                borderColor: '#ff6b35',
+                borderWidth: 2,
+                borderDash: [5, 5]
+            } : null;
+
+            // Create annotation for horizontal line at peak heat altitude (altitude chart only)
+            const horizontalLineAnnotation = showIndicators ? {
+                type: 'line',
+                scaleID: 'y',
+                value: peakHeatAltitude,
+                borderColor: '#00d9ff',
+                borderWidth: 2,
+                borderDash: [5, 5]
+            } : null;
+
+            const chartConfig = {
+                type: 'line',
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    layout: sharedLayout,
+                    plugins: {
+                        legend: { display: false },
+                        annotation: {
+                            annotations: {}
+                        }
+                    },
+                    scales: {
+                        x: sharedXAxisConfig,
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#9aa0a6' }
+                        }
+                    }
+                }
+            };
+
+            // Altitude Chart
+            if (charts.altitude) charts.altitude.destroy();
+            
+            const altitudeAnnotations = {};
+            if (verticalLineAnnotation) altitudeAnnotations.verticalLine = verticalLineAnnotation;
+            if (horizontalLineAnnotation) altitudeAnnotations.horizontalLine = horizontalLineAnnotation;
+            
+            // Convert to x-y data points
+            const altitudeData = time.map((t, i) => ({ x: t, y: altitude[i] }));
+            
+            charts.altitude = new Chart(document.getElementById('altitudeChart'), {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        data: altitudeData,
+                        borderColor: '#ff6b35',
+                        backgroundColor: 'rgba(255, 107, 53, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    layout: { ...sharedLayout },
+                    plugins: {
+                        legend: { display: false },
+                        annotation: {
+                            annotations: altitudeAnnotations
+                        }
+                    },
+                    scales: {
+                        x: { ...sharedXAxisConfig },
+                        y: {
+                            ...sharedYAxisConfig,
+                            title: {
+                                display: true,
+                                text: 'Altitude (km)',
+                                color: '#ff6b35',
+                                font: { family: 'Orbitron', size: 12 }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Velocity Chart
+            if (charts.velocity) charts.velocity.destroy();
+            
+            const velocityAnnotations = {};
+            if (verticalLineAnnotation) velocityAnnotations.verticalLine = verticalLineAnnotation;
+            
+            // Convert to x-y data points
+            const velocityData = time.map((t, i) => ({ x: t, y: velocity[i] }));
+            
+            charts.velocity = new Chart(document.getElementById('velocityChart'), {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        data: velocityData,
+                        borderColor: '#00d9ff',
+                        backgroundColor: 'rgba(0, 217, 255, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    layout: { ...sharedLayout },
+                    plugins: {
+                        legend: { display: false },
+                        annotation: {
+                            annotations: velocityAnnotations
+                        }
+                    },
+                    scales: {
+                        x: { ...sharedXAxisConfig },
+                        y: {
+                            ...sharedYAxisConfig,
+                            title: {
+                                display: true,
+                                text: 'Velocity (km/s)',
+                                color: '#00d9ff',
+                                font: { family: 'Orbitron', size: 12 }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Deceleration Chart
+            if (charts.decel) charts.decel.destroy();
+            
+            const decelAnnotations = {};
+            if (verticalLineAnnotation) decelAnnotations.verticalLine = verticalLineAnnotation;
+            
+            // Convert to x-y data points
+            const decelData = time.map((t, i) => ({ x: t, y: deceleration[i] }));
+            
+            charts.decel = new Chart(document.getElementById('decelChart'), {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        data: decelData,
+                        borderColor: '#39ff14',
+                        backgroundColor: 'rgba(57, 255, 20, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    layout: { ...sharedLayout },
+                    plugins: {
+                        legend: { display: false },
+                        annotation: {
+                            annotations: decelAnnotations
+                        }
+                    },
+                    scales: {
+                        x: { ...sharedXAxisConfig },
+                        y: {
+                            ...sharedYAxisConfig,
+                            title: {
+                                display: true,
+                                text: 'Deceleration (g)',
+                                color: '#39ff14',
+                                font: { family: 'Orbitron', size: 12 }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Heat Flux Chart
+            if (charts.heat) charts.heat.destroy();
+            
+            const heatAnnotations = {};
+            if (verticalLineAnnotation) heatAnnotations.verticalLine = verticalLineAnnotation;
+            
+            // Convert to x-y data points
+            const heatFluxDataPoints = time.map((t, i) => ({ x: t, y: heatFlux[i] / 1000 })); // Convert to kW/m²
+            
+            charts.heat = new Chart(document.getElementById('heatChart'), {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        data: heatFluxDataPoints,
+                        borderColor: '#ff6b35',
+                        backgroundColor: 'rgba(255, 107, 53, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    layout: { ...sharedLayout },
+                    plugins: {
+                        legend: { display: false },
+                        annotation: {
+                            annotations: heatAnnotations
+                        }
+                    },
+                    scales: {
+                        x: { ...sharedXAxisConfig },
+                        y: {
+                            ...sharedYAxisConfig,
+                            ticks: {
+                                ...sharedYAxisConfig.ticks,
+                                callback: function(value) {
+                                    return value.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Heat Flux (kW/m²)',
+                                color: '#ff6b35',
+                                font: { family: 'Orbitron', size: 12 }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Run initial simulation on load
+        window.addEventListener('load', () => {
+            runSimulation();
+        });
+    </script>
+</body>
+</html>
